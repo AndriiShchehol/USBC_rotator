@@ -3,6 +3,7 @@
 #include <sstream>
 #include <iomanip>
 #include <fstream>
+#include <filesystem>
 #include <string>
 #include <vector>
 #include <ctime>
@@ -66,10 +67,10 @@ bool Check_Nth(ifstream& file, unsigned long long counter, unsigned char formatS
     file.seekg(counter);
 
     switch (bytePosition) {
-        case 1: return strncmp(Nth, "55", 2); break;
-        case 2: return strncmp(Nth, "53", 2); break;
-        case 3: return strncmp(Nth, "42", 2); break;
-        case 4: return strncmp(Nth, "43", 2); break;
+        case 1: return strncmp(Nth, "55", 2) == 0; break;
+        case 2: return strncmp(Nth, "53", 2) == 0; break;
+        case 3: return strncmp(Nth, "42", 2) == 0; break;
+        case 4: return strncmp(Nth, "43", 2) == 0; break;
         default: return false; break;
     }
 
@@ -228,166 +229,166 @@ uint32_t GetUpper32Bits(uint64_t value) {
 
 
 // main code functionality taken outside of main function for logic construction convenience
-int WorkWithUsbcImage(ifstream& diskImageInput, ofstream& diskImageOutput, ofstream& logFile) {
-
-    char currentByte[3] = { 0 };
-
-    unsigned char charSample;
-    unsigned long long fileSize = 0;
-    unsigned long long i = 0;
-
-    int usbcCounter = 0;                                              
-    int usbcRotationBlockLength = 0;
-    
-    string usbcSector = "";
-    string bytesOfUsbcSector = "";
-    string rotatedSectors = "";
-    string bytesOfRotatedSectors = "";
-
-    //int usbcOutputCounter = 0;
-    //int rotationOutputCounter = 0;
-
-
-    if (diskImageInput.is_open()) {
-
-		fileSize = getFileSize(diskImageInput); // getting file size to know how much bytes we have to work with
-
-        // using a cycle to search for usbc
-        while (fileSize > i) {
-
-            diskImageInput.read(reinterpret_cast <char*> (&charSample), sizeof(charSample));
-            sprintf_s(currentByte, "%02x", charSample);
-
-            // whole file formatted output inside the console window
-            //if (i % 1 == 0) { cout << " "; };                     
-            //if (i % 4 == 0) { cout << " "; };
-            //if (i % 16 == 0) { cout << endl; };
-            //if (i % 512 == 0) { cout << endl; };
-            //cout << currentByte;
-            //diskImageInput.seekg(++i);
-
-
-            // checking each each corresponding byte one after anouther to spend less resources on wrong coincidences
-            if (Check_Nth(diskImageInput, i, charSample, 1) == 0) {
-                if (Check_Nth(diskImageInput, i, charSample, 2) == 0) {
-                    if (Check_Nth(diskImageInput, i, charSample, 3) == 0) {
-                        if (Check_Nth(diskImageInput, i, charSample, 4) == 0) {
-
-                            usbcRotationBlockLength = findImageSectorsAmount(diskImageInput, i, charSample);
-
-                            usbcSector = "";
-                            rotatedSectors = "";
-                            
-
-                            for (int usbcSector_byte = 0; usbcSector_byte < 512; usbcSector_byte++) {
-                                diskImageInput.seekg(i + usbcSector_byte);
-                                diskImageInput.read(reinterpret_cast <char*>(&charSample), sizeof(charSample));
-                                
-                                if (usbcSector_byte == 0) {usbcSector.append("44");}
-                                else if (usbcSector_byte == 1) {usbcSector.append("4F");}
-                                else if (usbcSector_byte == 2) {usbcSector.append("4E");}
-                                else if (usbcSector_byte == 3) {usbcSector.append("45");}
-                                else {
-                                    sprintf_s(currentByte, "%02x", charSample);
-                                    usbcSector.append(currentByte);
-                                }
-
-                            }
-                            diskImageInput.seekg(i);
-                            
-
-                            for (int rotatedSectorNumber = 1; rotatedSectorNumber < usbcRotationBlockLength; rotatedSectorNumber++) {
-                                for (int rotatedSectorByte = 0; rotatedSectorByte < 512; rotatedSectorByte++) {
-                                    diskImageInput.seekg(i + (rotatedSectorNumber * 512) + rotatedSectorByte);
-                                    diskImageInput.read(reinterpret_cast <char*>(&charSample), sizeof(charSample));
-                                    sprintf_s(currentByte, "%02x", charSample);
-                                    rotatedSectors.append(currentByte);
-                                }
-                            }
-                            diskImageInput.seekg(i);
-
-
-                            // each of sectors console output for debugging purposes
-                            /*cout << "\n\n usbc sector " << i << " \n\n";
-
-                            for (auto usbcOutputSymbol : usbcSector) { 
-                                
-                                if (usbcOutputCounter % 2 == 0) { cout << " "; }; 
-                                if (usbcOutputCounter % 8 == 0) { cout << " "; };
-                                if (usbcOutputCounter % 64 == 0) { cout << endl; };
-                                if (usbcOutputCounter % 1024 == 0) { cout << endl; };
-
-                                usbcOutputCounter++;
-
-                                cout << usbcOutputSymbol;
-
-                            }
-
-                            cout << "\n\n rotation sector " << i << " \n\n";
-
-                            for (auto rotationOutputSymbol : rotatedSectors) {
-
-                                if (rotationOutputCounter % 2 == 0) { cout << " "; };
-                                if (rotationOutputCounter % 8 == 0) { cout << " "; };
-                                if (rotationOutputCounter % 64 == 0) { cout << endl; };
-                                if (rotationOutputCounter % 1024 == 0) { cout << endl; };
-
-                                rotationOutputCounter++;
-
-                                cout << rotationOutputSymbol;
-
-                            }*/
-
-
-                            bytesOfUsbcSector = ConvertToBytes(usbcSector);
-                            bytesOfRotatedSectors = ConvertToBytes(rotatedSectors);
-
-                            usbcCounter++;
-                            
-
-                            if (usbcRotationBlockLength > 0) {
-                                diskImageOutput.seekp(i);
-                                diskImageOutput << bytesOfRotatedSectors;
-
-                                diskImageOutput.seekp(i + ((usbcRotationBlockLength - 1) * 512));
-                                diskImageOutput << bytesOfUsbcSector;
-                            }
-                            else if (usbcRotationBlockLength == 0) {
-                                diskImageOutput.seekp(i);
-                                diskImageOutput << bytesOfUsbcSector;
-                            }
-                            
-                          
-                            cout << endl << " usbc sector on byte " << i << " with rotation block length of " << usbcRotationBlockLength << " has been rotated" << endl;
-							logFile << endl << " usbc sector on byte " << i << " with rotation block length of " << usbcRotationBlockLength << " has been rotated" << endl;
-
-                            
-                            // going to the point after current rotation block to prevent wasting time on searching inside of it
-                            diskImageInput.seekg(i + (usbcRotationBlockLength * 512 + 1));
-                        }
-                    }
-                    else {diskImageInput.seekg(i += 512);}
-                }
-                else {diskImageInput.seekg(i += 512);}
-
-            }
-            else {diskImageInput.seekg(i += 512);}
-        }
-        
-
-        cout << endl << endl << "Total USBC counter: " << usbcCounter;
-		logFile << endl << endl << "Total USBC counter: " << usbcCounter;
-
-        
-        return 0;
-    }
-    else {
-        cerr << "Error opening file." << endl;
-		logFile << "Error opening file." << endl;
-        return 1;
-    }
-
-}
+//int WorkWithUsbcImage(ifstream& diskImageInput, ofstream& diskImageOutput, ofstream& logFile) {
+//
+//    char currentByte[3] = { 0 };
+//
+//    unsigned char charSample;
+//    unsigned long long fileSize = 0;
+//    unsigned long long i = 0;
+//
+//    int usbcCounter = 0;                                              
+//    int usbcRotationBlockLength = 0;
+//    
+//    string usbcSector = "";
+//    string bytesOfUsbcSector = "";
+//    string rotatedSectors = "";
+//    string bytesOfRotatedSectors = "";
+//
+//    //int usbcOutputCounter = 0;
+//    //int rotationOutputCounter = 0;
+//
+//
+//    if (diskImageInput.is_open()) {
+//
+//		fileSize = getFileSize(diskImageInput); // getting file size to know how much bytes we have to work with
+//
+//        // using a cycle to search for usbc
+//        while (fileSize > i) {
+//
+//            diskImageInput.read(reinterpret_cast <char*> (&charSample), sizeof(charSample));
+//            sprintf_s(currentByte, "%02x", charSample);
+//
+//            // whole file formatted output inside the console window
+//            //if (i % 1 == 0) { cout << " "; };                     
+//            //if (i % 4 == 0) { cout << " "; };
+//            //if (i % 16 == 0) { cout << endl; };
+//            //if (i % 512 == 0) { cout << endl; };
+//            //cout << currentByte;
+//            //diskImageInput.seekg(++i);
+//
+//
+//            // checking each each corresponding byte one after anouther to spend less resources on wrong coincidences
+//            if (Check_Nth(diskImageInput, i, charSample, 1) == 0) {
+//                if (Check_Nth(diskImageInput, i, charSample, 2) == 0) {
+//                    if (Check_Nth(diskImageInput, i, charSample, 3) == 0) {
+//                        if (Check_Nth(diskImageInput, i, charSample, 4) == 0) {
+//
+//                            usbcRotationBlockLength = findImageSectorsAmount(diskImageInput, i, charSample);
+//
+//                            usbcSector = "";
+//                            rotatedSectors = "";
+//                            
+//
+//                            for (int usbcSector_byte = 0; usbcSector_byte < 512; usbcSector_byte++) {
+//                                diskImageInput.seekg(i + usbcSector_byte);
+//                                diskImageInput.read(reinterpret_cast <char*>(&charSample), sizeof(charSample));
+//                                
+//                                if (usbcSector_byte == 0) {usbcSector.append("44");}
+//                                else if (usbcSector_byte == 1) {usbcSector.append("4F");}
+//                                else if (usbcSector_byte == 2) {usbcSector.append("4E");}
+//                                else if (usbcSector_byte == 3) {usbcSector.append("45");}
+//                                else {
+//                                    sprintf_s(currentByte, "%02x", charSample);
+//                                    usbcSector.append(currentByte);
+//                                }
+//
+//                            }
+//                            diskImageInput.seekg(i);
+//                            
+//
+//                            for (int rotatedSectorNumber = 1; rotatedSectorNumber < usbcRotationBlockLength; rotatedSectorNumber++) {
+//                                for (int rotatedSectorByte = 0; rotatedSectorByte < 512; rotatedSectorByte++) {
+//                                    diskImageInput.seekg(i + (rotatedSectorNumber * 512) + rotatedSectorByte);
+//                                    diskImageInput.read(reinterpret_cast <char*>(&charSample), sizeof(charSample));
+//                                    sprintf_s(currentByte, "%02x", charSample);
+//                                    rotatedSectors.append(currentByte);
+//                                }
+//                            }
+//                            diskImageInput.seekg(i);
+//
+//
+//                            // each of sectors console output for debugging purposes
+//                            /*cout << "\n\n usbc sector " << i << " \n\n";
+//
+//                            for (auto usbcOutputSymbol : usbcSector) { 
+//                                
+//                                if (usbcOutputCounter % 2 == 0) { cout << " "; }; 
+//                                if (usbcOutputCounter % 8 == 0) { cout << " "; };
+//                                if (usbcOutputCounter % 64 == 0) { cout << endl; };
+//                                if (usbcOutputCounter % 1024 == 0) { cout << endl; };
+//
+//                                usbcOutputCounter++;
+//
+//                                cout << usbcOutputSymbol;
+//
+//                            }
+//
+//                            cout << "\n\n rotation sector " << i << " \n\n";
+//
+//                            for (auto rotationOutputSymbol : rotatedSectors) {
+//
+//                                if (rotationOutputCounter % 2 == 0) { cout << " "; };
+//                                if (rotationOutputCounter % 8 == 0) { cout << " "; };
+//                                if (rotationOutputCounter % 64 == 0) { cout << endl; };
+//                                if (rotationOutputCounter % 1024 == 0) { cout << endl; };
+//
+//                                rotationOutputCounter++;
+//
+//                                cout << rotationOutputSymbol;
+//
+//                            }*/
+//
+//
+//                            bytesOfUsbcSector = ConvertToBytes(usbcSector);
+//                            bytesOfRotatedSectors = ConvertToBytes(rotatedSectors);
+//
+//                            usbcCounter++;
+//                            
+//
+//                            if (usbcRotationBlockLength > 0) {
+//                                diskImageOutput.seekp(i);
+//                                diskImageOutput << bytesOfRotatedSectors;
+//
+//                                diskImageOutput.seekp(i + ((usbcRotationBlockLength - 1) * 512));
+//                                diskImageOutput << bytesOfUsbcSector;
+//                            }
+//                            else if (usbcRotationBlockLength == 0) {
+//                                diskImageOutput.seekp(i);
+//                                diskImageOutput << bytesOfUsbcSector;
+//                            }
+//                            
+//                          
+//                            cout << endl << " usbc sector on byte " << i << " with rotation block length of " << usbcRotationBlockLength << " has been rotated" << endl;
+//							logFile << endl << " usbc sector on byte " << i << " with rotation block length of " << usbcRotationBlockLength << " has been rotated" << endl;
+//
+//                            
+//                            // going to the point after current rotation block to prevent wasting time on searching inside of it
+//                            diskImageInput.seekg(i + (usbcRotationBlockLength * 512 + 1));
+//                        }
+//                    }
+//                    else {diskImageInput.seekg(i += 512);}
+//                }
+//                else {diskImageInput.seekg(i += 512);}
+//
+//            }
+//            else {diskImageInput.seekg(i += 512);}
+//        }
+//        
+//
+//        cout << endl << endl << "Total USBC counter: " << usbcCounter;
+//		logFile << endl << endl << "Total USBC counter: " << usbcCounter;
+//
+//        
+//        return 0;
+//    }
+//    else {
+//        cerr << "Error opening file." << endl;
+//		logFile << "Error opening file." << endl;
+//        return 1;
+//    }
+//
+//}
 
 
 // Function to list available physical drives
@@ -414,6 +415,171 @@ vector<string> ListAvailableDisks() {
     }
     return disks;
 }
+
+
+
+
+
+
+void ProcessImage(const string& imagePath, ofstream& logFile) {
+    // Open the image file (regular file) for read/write using Win32 API
+    wstring wideImagePath = wstring(imagePath.begin(), imagePath.end());
+
+    HANDLE hFile = CreateFile(
+        wideImagePath.c_str(),                  // Image file path
+        GENERIC_READ | GENERIC_WRITE,           // Access mode
+        FILE_SHARE_READ | FILE_SHARE_WRITE,     // Share mode
+        NULL,                                   // Security attributes
+        OPEN_EXISTING,                          // Open existing file
+        FILE_ATTRIBUTE_NORMAL,                  // Flags and attributes for a normal file
+        NULL                                    // Template file
+    );
+
+    if (hFile == INVALID_HANDLE_VALUE) {
+        cerr << endl << "Failed to open image file. Error: " << GetLastError() << endl;
+        logFile << endl << "Failed to open image file: " << imagePath << ". Error: " << GetLastError() << endl;
+        return;
+    }
+
+    const DWORD sectorSize = 512; // Sector size
+    BYTE* buffer = new BYTE[sectorSize];
+    DWORD bytesRead, bytesWritten;
+
+    unsigned long long offset = 0;
+    long offsetLow32 = 0;
+    long offsetHigh32 = 0;
+
+    cout << endl << "Processing image: " << imagePath << endl << endl;
+    logFile << endl << "Processing image: " << imagePath << endl << endl;
+
+    // Get the total image size
+    LARGE_INTEGER imageSize;
+    if (!GetFileSizeEx(hFile, &imageSize)) {
+        cerr << "Failed to get image size. Error: " << GetLastError() << endl;
+        logFile << "Failed to get image size for: " << imagePath << ". Error: " << GetLastError() << endl;
+        delete[] buffer;
+        CloseHandle(hFile);
+        return;
+    }
+
+    while (offset <static_cast<unsigned long long>(imageSize.QuadPart)) {
+
+        // Position file pointer
+        offsetLow32 = GetLower32Bits(offset);
+        offsetHigh32 = GetUpper32Bits(offset);
+        SetFilePointer(hFile, offsetLow32, &offsetHigh32, FILE_BEGIN);
+
+        // Read a single sector
+        if (!ReadFile(hFile, buffer, sectorSize, &bytesRead, NULL) || bytesRead != sectorSize) {
+            // Read error or EOF
+            if (GetLastError() != ERROR_HANDLE_EOF) {
+                cerr << endl << "Failed to read sector at offset " << offset << ". Error: " << GetLastError() << endl << endl;
+                logFile << endl << "Failed to read sector at offset " << offset << ". Error: " << GetLastError() << endl << endl;
+            }
+            // Move on (break to avoid infinite loop) — advance by sector to attempt continuation
+            offset += sectorSize;
+            break;
+        }
+
+        // Check if the sector starts with "USBC"
+        const BYTE expectedSignature[4] = { 'U', 'S', 'B', 'C' };
+        if (memcmp(buffer, expectedSignature, 4) == 0) {
+
+            cout << "Found 'USBC' at offset: " << offset << " bytes" << endl;
+            logFile << "[" << CurrentTime() << "]" << endl
+                << "Found 'USBC' at offset: " << offset << " bytes" << endl;
+
+            // Determine the length of the USBC block
+            unsigned int blockLength = findDiskSectorsAmount(buffer);
+
+
+            cout << "USBC block length: " << blockLength << " sectors" << endl;
+            logFile << "USBC block length: " << blockLength << " sectors" << endl;
+            
+            
+            if (blockLength == 0 || blockLength == 1) {
+                cerr << "Invalid block length at offset " << offset << ". Skipping..." << endl << endl;
+                logFile << "Invalid block length at offset " << offset << ". Skipping..." << endl << endl;
+                offset += sectorSize;
+                continue;
+			}
+
+            // Read the entire block into memory
+            BYTE* blockBuffer = new BYTE[blockLength * sectorSize];
+
+            offsetLow32 = GetLower32Bits(offset);
+            offsetHigh32 = GetUpper32Bits(offset);
+            SetFilePointer(hFile, offsetLow32, &offsetHigh32, FILE_BEGIN);
+
+            if (!ReadFile(hFile, blockBuffer, blockLength * sectorSize, &bytesRead, NULL) || bytesRead != blockLength * sectorSize) {
+                cerr << "Failed to read USBC block. Error: " << GetLastError() << endl;
+                logFile << "Failed to read USBC block at offset " << offset << ". Error: " << GetLastError() << endl;
+                delete[] blockBuffer;
+                // Skip this block and continue scanning
+                offset += sectorSize;
+                continue;
+            }
+
+            // Change the signature of the rotated block to "DONE"
+            memcpy(blockBuffer, "DONE", 4);
+
+            // Perform circular rotation
+            BYTE* rotatedBuffer = new BYTE[blockLength * sectorSize];
+            if (blockLength > 1) {
+                memcpy(rotatedBuffer, blockBuffer + sectorSize, (blockLength - 1) * sectorSize); // Shift all sectors up
+                memcpy(rotatedBuffer + (blockLength - 1) * sectorSize, blockBuffer, sectorSize); // Move first sector to the end
+            }
+            else {
+                // If blockLength == 1, rotation is a no-op but still use the changed signature
+                memcpy(rotatedBuffer, blockBuffer, sectorSize);
+            }
+
+            // Write the rotated block back to the image
+            offsetLow32 = GetLower32Bits(offset);
+            offsetHigh32 = GetUpper32Bits(offset);
+            SetFilePointer(hFile, offsetLow32, &offsetHigh32, FILE_BEGIN);
+
+            BOOL writeResult = WriteFile(hFile, rotatedBuffer, blockLength * sectorSize, &bytesWritten, NULL);
+            if (!writeResult || bytesWritten != blockLength * sectorSize) {
+                cerr << "Failed to write rotated block at offset " << offset << ". Error: " << GetLastError() << endl;
+                logFile << "Failed to write rotated block at offset " << offset << ". Error: " << GetLastError() << endl;
+            }
+            else {
+                FlushFileBuffers(hFile); // Ensure data is flushed
+                cout << "Successfully wrote rotated block to offset " << offset << " and marked it as 'DONE'" << endl << endl;
+                logFile << "Successfully wrote rotated block to offset " << offset << " and marked it as 'DONE'" << endl << endl;
+            }
+
+            // Clean up
+            ZeroMemory(buffer, sectorSize);
+            delete[] blockBuffer;
+            delete[] rotatedBuffer;
+
+            // Skip to the end of the block
+            offset += static_cast<unsigned long long>(blockLength) * sectorSize;
+        }
+        else {
+            // Not a USBC sector -- move to the next sector
+            offset += sectorSize;
+        }
+
+        // Move the file pointer to the next offset explicitly
+        offsetLow32 = GetLower32Bits(offset);
+        offsetHigh32 = GetUpper32Bits(offset);
+        SetFilePointer(hFile, offsetLow32, &offsetHigh32, FILE_BEGIN);
+    }
+
+    if (GetLastError() != ERROR_HANDLE_EOF) {
+        cerr << "Error reading image. Error: " << GetLastError() << endl;
+        logFile << "Error reading image: " << GetLastError() << endl;
+    }
+
+    delete[] buffer;
+    CloseHandle(hFile);
+}
+
+
+
 
 
 // function to process the disk directly
@@ -501,7 +667,9 @@ void ProcessDisk(const string& diskPath, ofstream& logFile) {
         if (memcmp(buffer, expectedSignature, 4) == 0) {
 
             cout << "Found 'USBC' at offset: " << offset << " bytes" << endl;
-            logFile << "Found 'USBC' at offset: " << offset << " bytes" << endl;
+
+            logFile << "[" << CurrentTime() << "]" << endl 
+                << "Found 'USBC' at offset: " << offset << " bytes" << endl;
 
             // Determine the length of the USBC block
             unsigned int blockLength = findDiskSectorsAmount(buffer);
@@ -514,6 +682,15 @@ void ProcessDisk(const string& diskPath, ofstream& logFile) {
 
             cout << "USBC block length: " << blockLength << " sectors" << endl;
             logFile << "USBC block length: " << blockLength << " sectors" << endl;
+
+
+            if (blockLength == 0 || blockLength == 1) {
+                cerr << "Invalid block length at offset " << offset << ". Skipping..." << endl << endl;
+                logFile << "Invalid block length at offset " << offset << ". Skipping..." << endl << endl;
+                offset += sectorSize;
+                continue;
+            }
+
 
             // Read the entire block into memory
             BYTE* blockBuffer = new BYTE[blockLength * sectorSize];
@@ -594,7 +771,7 @@ void ProcessDisk(const string& diskPath, ofstream& logFile) {
             //        delete[] verifyBuffer;
 
 
-                    // Clear the buffer
+            // Clear the buffer
             ZeroMemory(buffer, sectorSize);
 
             delete[] blockBuffer;
@@ -687,7 +864,9 @@ int main() {
     else if (diskOrImg == "i" || diskOrImg == "I" || diskOrImg == "img" || diskOrImg == "Img" || diskOrImg == "IMG" || diskOrImg == "image" || diskOrImg == "Image" || diskOrImg == "IMAGE") {
         ifstream pathFileInput, diskImageInput; 
         ofstream diskImageOutput;
-		string path, fileIsCorrect;
+        std::filesystem::path path; // ! is not available in file Path 
+        string fileIsCorrect;
+
      
 	    logFile << "Chosen to work with an image file." << endl;
 
@@ -719,13 +898,17 @@ int main() {
 			logFile << "Working with image file at path: " << path << endl;
             logFile << "Start time: " << CurrentTime() << endl;
 
-            diskImageInput.open(path, ios::binary | ios::in);
+
+			ProcessImage(path.string(), logFile);
+
+
+            /*diskImageInput.open(path, ios::binary | ios::in);
             diskImageOutput.open(path, ios::binary | ios::out | ios::in);
 
             WorkWithUsbcImage(diskImageInput, diskImageOutput, logFile);
             
             diskImageOutput.close();        
-            diskImageInput.close();
+            diskImageInput.close();*/
             
 			logFile << "Finished editing an image with path " << path << endl;
 			logFile << "End time: " << CurrentTime() << endl;

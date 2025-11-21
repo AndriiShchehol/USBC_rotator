@@ -1,1 +1,2 @@
-D:\usbc_img\usbc_1.img
+c:\!usbc_img\usbc_1.img  
+Path with no spaces needed!

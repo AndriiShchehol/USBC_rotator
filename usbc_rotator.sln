@@ -30,12 +30,9 @@ Global
 		{BAB13C25-7CA8-4DBB-89C4-07CBC6B4AA40}.Release|x64.Build.0 = Release|x64
 		{BAB13C25-7CA8-4DBB-89C4-07CBC6B4AA40}.Release|x86.ActiveCfg = Release|Win32
 		{BAB13C25-7CA8-4DBB-89C4-07CBC6B4AA40}.Release|x86.Build.0 = Release|Win32
-		{BAB13C25-7CA8-4DBB-89C4-07CBC6B4AA40}.USBC_rotator|ARM64.ActiveCfg = USBC_rotator|x64
-		{BAB13C25-7CA8-4DBB-89C4-07CBC6B4AA40}.USBC_rotator|ARM64.Build.0 = USBC_rotator|x64
-		{BAB13C25-7CA8-4DBB-89C4-07CBC6B4AA40}.USBC_rotator|x64.ActiveCfg = USBC_rotator|x64
-		{BAB13C25-7CA8-4DBB-89C4-07CBC6B4AA40}.USBC_rotator|x64.Build.0 = USBC_rotator|x64
-		{BAB13C25-7CA8-4DBB-89C4-07CBC6B4AA40}.USBC_rotator|x86.ActiveCfg = USBC_rotator|Win32
-		{BAB13C25-7CA8-4DBB-89C4-07CBC6B4AA40}.USBC_rotator|x86.Build.0 = USBC_rotator|Win32
+		{BAB13C25-7CA8-4DBB-89C4-07CBC6B4AA40}.USBC_rotator|ARM64.ActiveCfg = Release|ARM64
+		{BAB13C25-7CA8-4DBB-89C4-07CBC6B4AA40}.USBC_rotator|x64.ActiveCfg = Release|x64
+		{BAB13C25-7CA8-4DBB-89C4-07CBC6B4AA40}.USBC_rotator|x86.ActiveCfg = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
