@@ -228,6 +228,12 @@ uint32_t GetUpper32Bits(uint64_t value) {
 }
 
 
+void HoldWindowBeforeExit() {
+    cout << "Press Enter to exit...";
+    cin.get();
+}
+
+
 // main code functionality taken outside of main function for logic construction convenience
 //int WorkWithUsbcImage(ifstream& diskImageInput, ofstream& diskImageOutput, ofstream& logFile) {
 //
@@ -416,11 +422,7 @@ vector<string> ListAvailableDisks() {
     return disks;
 }
 
-
-
-
-
-
+// function to process an image of a disk
 void ProcessImage(const string& imagePath, ofstream& logFile) {
     // Open the image file (regular file) for read/write using Win32 API
     wstring wideImagePath = wstring(imagePath.begin(), imagePath.end());
@@ -569,17 +571,14 @@ void ProcessImage(const string& imagePath, ofstream& logFile) {
         SetFilePointer(hFile, offsetLow32, &offsetHigh32, FILE_BEGIN);
     }
 
-    if (GetLastError() != ERROR_HANDLE_EOF) {
+    if (GetLastError() != ERROR_HANDLE_EOF && GetLastError() !=  0) {
         cerr << "Error reading image. Error: " << GetLastError() << endl;
-        logFile << "Error reading image: " << GetLastError() << endl;
+        logFile << "Error reading image. Error: " << GetLastError() << endl;
     }
 
     delete[] buffer;
     CloseHandle(hFile);
 }
-
-
-
 
 
 // function to process the disk directly
@@ -793,9 +792,9 @@ void ProcessDisk(const string& diskPath, ofstream& logFile) {
         SetFilePointer(hDisk, offsetLow32, &offsetHigh32, FILE_BEGIN);
     }
 
-    if (GetLastError() != ERROR_HANDLE_EOF) {
+    if (GetLastError() != ERROR_HANDLE_EOF && GetLastError() != 0) {
         cerr << "Error reading disk. Error: " << GetLastError() << endl;
-        logFile << "Error reading disk: " << GetLastError() << endl;
+        logFile << "Error reading disk. Error: " << GetLastError() << endl;
     }
 
     delete[] buffer;
@@ -845,9 +844,11 @@ int main() {
     cin >> diskOrImg;
     cout << endl;
 
-	logFile << "Storage type: " << diskOrImg << endl;
+	
 
     if (diskOrImg == "d" || diskOrImg == "D" || diskOrImg == "disc" || diskOrImg == "Disc" || diskOrImg == "DISC" || diskOrImg == "disk" || diskOrImg == "Disk" || diskOrImg == "DISK") {
+
+        logFile << "Storage type: Disk" << endl;
 		
 		logFile << "Chosen to work with a disk." << endl;
 		logFile << "Start time: " << CurrentTime() << endl;
@@ -858,10 +859,13 @@ int main() {
 		logFile << "End time: " << CurrentTime() << endl;
         if (logFile.is_open()) { logFile.close(); }
 
+        system("pause");
         return 0;
-		getchar();
     }
     else if (diskOrImg == "i" || diskOrImg == "I" || diskOrImg == "img" || diskOrImg == "Img" || diskOrImg == "IMG" || diskOrImg == "image" || diskOrImg == "Image" || diskOrImg == "IMAGE") {
+
+        logFile << "Storage type: Image" << endl;
+
         ifstream pathFileInput, diskImageInput; 
         ofstream diskImageOutput;
         std::filesystem::path path; // ! is not available in file Path 
@@ -882,8 +886,8 @@ int main() {
 			logFile << "Path.txt not found in the program directory." << endl;
             if (logFile.is_open()) {logFile.close();}
 
+            system("pause");
             return 0;
-			getchar();
         }
 
 
@@ -914,16 +918,16 @@ int main() {
 			logFile << "End time: " << CurrentTime() << endl;
             if (logFile.is_open()) { logFile.close(); }
 
+            system("pause");
             return 0;
-            getchar();
         }
         else if (fileIsCorrect == "n" || fileIsCorrect == "N" || fileIsCorrect == "no" || fileIsCorrect == "No" || fileIsCorrect == "NO") {
             
 			logFile << "Wrong path." << path << endl;
             if (logFile.is_open()) { logFile.close(); }
             
+            system("pause");
             return 0;
-            getchar();
             //PostMessage(GetConsoleWindow(), WM_CLOSE, 0, 0);
         }
 
@@ -934,8 +938,8 @@ int main() {
 		logFile << "Source format not supported" << endl;
         if (logFile.is_open()) { logFile.close(); }
 
+        system("pause");
         return 0;
-		getchar();
     }
 
 }
