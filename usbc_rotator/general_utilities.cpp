@@ -7,16 +7,6 @@
 
 using namespace std;
 
-unsigned long long GetFileSize(ifstream& file) {
-	unsigned long long fileSize = 0;
-
-	file.seekg(0, ios::end);
-	fileSize = file.tellg();
-	file.seekg(0, ios::beg);
-
-	return fileSize;
-}
-
 string CurrentTime() {
 	time_t now = time(0);
 	tm localTime;

@@ -106,7 +106,7 @@ void ProcessImage(const string& imagePath, ofstream& logFile) {
                 << "Found 'USBC' at offset: " << offset << " bytes" << endl;
 
             // Determine the length of the USBC block
-            unsigned int blockLength = FindDiskSectorsAmount(buffer);
+            unsigned int blockLength = GetMovedBlockLength(buffer);
 
 
             cout << "USBC block length: " << blockLength << " sectors" << endl;
@@ -262,7 +262,7 @@ void ProcessDisk(const string& diskPath, ofstream& logFile) {
                 << "Found 'USBC' at offset: " << offset << " bytes" << endl;
 
             // Determine the length of the USBC block
-            unsigned int blockLength = FindDiskSectorsAmount(buffer);
+            unsigned int blockLength = GetMovedBlockLength(buffer);
 
             cout << "USBC block length: " << blockLength << " sectors" << endl;
             logFile << "USBC block length: " << blockLength << " sectors" << endl;
