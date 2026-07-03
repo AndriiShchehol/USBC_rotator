@@ -1,2 +1,2 @@
-c:\!usbc_img\usbc_1.img  
-Path with no spaces needed!
+c:\usbc_img\usbc_1.img  
+Path with no spaces or exclamation marks needed!

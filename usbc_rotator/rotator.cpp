@@ -1,201 +1,14 @@
+#include "general_utilities.h"
+#include "usbc_sector_utilities.h"
+
 #include <Windows.h>
 #include <iostream>
-#include <sstream>
-#include <iomanip>
 #include <fstream>
 #include <filesystem>
 #include <string>
 #include <vector>
-#include <ctime>
 
 using namespace std;
-
-string CurrentTime() {
-
-    // Get the current time
-    time_t now = time(0);
-    tm localTime;
-    localtime_s(&localTime, &now);
-
-    // Format the time as a string
-    char buffer[80];
-    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &localTime);
-
-    return string(buffer);
-}
-
-
-// Moving to the end of file and saving its position as a length for our current file so we could know how much bytes our file has
-unsigned long long getFileSize(ifstream& file) {
-    unsigned long long fileSize = 0;
-
-    file.seekg(0, ios::end);
-    fileSize = file.tellg();
-    file.seekg(0, ios::beg);
-
-    return fileSize;
-}
-
-
-// Function to convert a buffer to a hexadecimal string
-string BufferToHex(const BYTE* buffer, DWORD size) {
-    stringstream hexStream;
-    for (DWORD i = 0; i < size; ++i) {
-        hexStream << hex << setw(2) << setfill('0') << static_cast<int>(buffer[i]);
-    }
-    return hexStream.str();
-}
-
-
-// Function to convert a hexadecimal string back to a binary buffer
-void HexToBuffer(const string& hexString, BYTE* buffer, DWORD size) {
-    for (DWORD i = 0; i < size; ++i) {
-        string byteString = hexString.substr(i * 2, 2);
-        buffer[i] = static_cast<BYTE>(stoi(byteString, nullptr, 16));
-    }
-}
-
-
-// Using a function to authomatize comparation process for usbc hex values
-bool Check_Nth(ifstream& file, unsigned long long counter, unsigned char formatSample, int bytePosition) {
-
-    char Nth[3] = { 0 };
-
-
-    file.seekg(counter + (bytePosition - 1));
-    file.read(reinterpret_cast <char*> (&formatSample), sizeof(formatSample));
-    sprintf_s(Nth, "%02x", formatSample);
-    file.seekg(counter);
-
-    switch (bytePosition) {
-    case 1: return strncmp(Nth, "55", 2) == 0; break;
-    case 2: return strncmp(Nth, "53", 2) == 0; break;
-    case 3: return strncmp(Nth, "42", 2) == 0; break;
-    case 4: return strncmp(Nth, "43", 2) == 0; break;
-    default: return false; break;
-    }
-
-};
-
-
-char getByteAtOfcet(ifstream& file, unsigned long long counter, int ofcet, unsigned char formatSample) {
-    char workingByte[3] = { 0 };
-
-    file.seekg(counter + ofcet);
-    file.read(reinterpret_cast <char*> (&formatSample), sizeof(formatSample));
-    return sprintf_s(workingByte, "%02x", formatSample);
-}
-
-
-string getBytesSectorAmount(ifstream& file, unsigned long long counter, unsigned char formatSample) {
-    string bytesAmountHex = "";
-
-    bytesAmountHex += getByteAtOfcet(file, counter, 11, formatSample);
-    bytesAmountHex += getByteAtOfcet(file, counter, 10, formatSample);
-    bytesAmountHex += getByteAtOfcet(file, counter, 9, formatSample);
-    bytesAmountHex += getByteAtOfcet(file, counter, 8, formatSample);
-
-    return bytesAmountHex;
-}
-
-
-string getHexSectorAmount(ifstream& file, unsigned long long counter, unsigned char formatSample) {
-    string sectorsAmountHex = "";
-
-    sectorsAmountHex += getByteAtOfcet(file, counter, 22, formatSample);
-    sectorsAmountHex += getByteAtOfcet(file, counter, 23, formatSample);
-
-    return sectorsAmountHex;
-}
-
-
-// Using this function for searching and comparing two different values inside corrupted header that may tell us about circular rotation block length
-unsigned int findImageSectorsAmount(ifstream& file, unsigned long long counter, unsigned char formatSample) {
-
-    string bytesAmountHex = getBytesSectorAmount(file, counter, formatSample); // Using our function to get bytes amount in hex format
-    string sectorsAmountHex = getHexSectorAmount(file, counter, formatSample); // Using our function to get sectors amount in hex format
-
-    file.seekg(counter);
-
-
-    // Checking if both values give us the same result so we will not touch incomplete or wrong sectors to prevent even further image corruption
-    if ((stoul(bytesAmountHex, nullptr, 16) / 512) == stoul(sectorsAmountHex, nullptr, 16) && bytesAmountHex != "" && sectorsAmountHex != "") {
-        return stoul(sectorsAmountHex, nullptr, 16);
-    }
-    else {
-        return 0;
-    }
-}
-
-
-// Function to find the number of sectors in the usbc block
-unsigned int findDiskSectorsAmount(const BYTE* sector) {
-    string sectorsAmountHex = "";
-    string bytesAmountHex = "";
-
-    // Extract the sector count (bytes 22-23) in direct order
-    sectorsAmountHex += BufferToHex(&sector[22], 1);
-    sectorsAmountHex += BufferToHex(&sector[23], 1);
-
-    // Extract the byte count (bytes 8-11) in reverse order
-    bytesAmountHex += BufferToHex(&sector[11], 1);
-    bytesAmountHex += BufferToHex(&sector[10], 1);
-    bytesAmountHex += BufferToHex(&sector[9], 1);
-    bytesAmountHex += BufferToHex(&sector[8], 1);
-
-    // Validate and return the sector count
-    if ((stoul(bytesAmountHex, nullptr, 16) / 512) == stoul(sectorsAmountHex, nullptr, 16) && bytesAmountHex != "" && sectorsAmountHex != "") {
-        return stoul(sectorsAmountHex, nullptr, 16);
-    }
-
-    return 0;
-}
-
-
-// Using a custom function to convert our hex into bytes so we wont lose any data
-string ConvertToBytes(string hexString) {
-
-    basic_string<uint8_t> bytes;
-
-
-    for (size_t i = 0; i < hexString.length(); i += 2)
-    {
-        uint16_t byte;
-
-
-        // Get current pair and store in nextbyte
-        string nextByte = hexString.substr(i, 2);
-
-        // Put the pair into an istringstream and stream it through std::hex for
-        // conversion into an integer value.
-        // This will calculate the byte value of your string-represented hex value.
-        // converting our bytes into hex values 
-        istringstream(nextByte) >> hex >> byte;
-
-        // adding our values into our byte array via casting because stream does not work with uint8 directly
-        bytes.push_back(static_cast<uint8_t>(byte));
-    }
-
-    // Creating a string with binary values so we can output it directly into file
-    string result(begin(bytes), end(bytes));
-
-    return result;
-}
-
-
-uint32_t GetLower32Bits(uint64_t value) {
-    return static_cast<uint32_t>(value & 0xFFFFFFFFLL);
-}
-
-uint32_t GetUpper32Bits(uint64_t value) {
-    return static_cast<uint32_t>((value & 0xFFFFFFFF00000000LL) >> 32);
-}
-
-
-void HoldWindowBeforeExit() {
-    cout << "Press Enter to exit...";
-    cin.get();
-}
 
 // Function to list available physical drives
 vector<string> ListAvailableDisks() {
@@ -204,7 +17,7 @@ vector<string> ListAvailableDisks() {
         string diskPath = "\\\\.\\PhysicalDrive" + to_string(i);
         wstring wideDiskPath = wstring(diskPath.begin(), diskPath.end()); // Convert to wide string for CreateFile function
 
-        HANDLE hDisk = CreateFile(
+        HANDLE diskHandle = CreateFile(
             wideDiskPath.c_str(),
             GENERIC_READ,
             FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -214,9 +27,9 @@ vector<string> ListAvailableDisks() {
             NULL
         );
 
-        if (hDisk != INVALID_HANDLE_VALUE) {
+        if (diskHandle != INVALID_HANDLE_VALUE) {
             disks.push_back(diskPath);
-            CloseHandle(hDisk);
+            CloseHandle(diskHandle);
         }
     }
     return disks;
@@ -228,7 +41,7 @@ void ProcessImage(const string& imagePath, ofstream& logFile) {
     // Open the image file (regular file) for read/write using Win32 API
     wstring wideImagePath = wstring(imagePath.begin(), imagePath.end());
 
-    HANDLE hFile = CreateFile(
+    HANDLE fileHandle = CreateFile(
         wideImagePath.c_str(),                  // Image file path
         GENERIC_READ | GENERIC_WRITE,           // Access mode
         FILE_SHARE_READ | FILE_SHARE_WRITE,     // Share mode
@@ -238,7 +51,7 @@ void ProcessImage(const string& imagePath, ofstream& logFile) {
         NULL                                    // Template file
     );
 
-    if (hFile == INVALID_HANDLE_VALUE) {
+    if (fileHandle == INVALID_HANDLE_VALUE) {
         cerr << endl << "Failed to open image file. Error: " << GetLastError() << endl;
         logFile << endl << "Failed to open image file: " << imagePath << ". Error: " << GetLastError() << endl;
         return;
@@ -257,11 +70,11 @@ void ProcessImage(const string& imagePath, ofstream& logFile) {
 
     // Get the total image size
     LARGE_INTEGER imageSize;
-    if (!GetFileSizeEx(hFile, &imageSize)) {
+    if (!GetFileSizeEx(fileHandle, &imageSize)) {
         cerr << "Failed to get image size. Error: " << GetLastError() << endl;
         logFile << "Failed to get image size for: " << imagePath << ". Error: " << GetLastError() << endl;
         delete[] buffer;
-        CloseHandle(hFile);
+        CloseHandle(fileHandle);
         return;
     }
 
@@ -270,10 +83,10 @@ void ProcessImage(const string& imagePath, ofstream& logFile) {
         // Position file pointer
         offsetLow32 = GetLower32Bits(offset);
         offsetHigh32 = GetUpper32Bits(offset);
-        SetFilePointer(hFile, offsetLow32, &offsetHigh32, FILE_BEGIN);
+        SetFilePointer(fileHandle, offsetLow32, &offsetHigh32, FILE_BEGIN);
 
         // Read a single sector
-        if (!ReadFile(hFile, buffer, sectorSize, &bytesRead, NULL) || bytesRead != sectorSize) {
+        if (!ReadFile(fileHandle, buffer, sectorSize, &bytesRead, NULL) || bytesRead != sectorSize) {
             // Read error or EOF
             if (GetLastError() != ERROR_HANDLE_EOF) {
                 cerr << endl << "Failed to read sector at offset " << offset << ". Error: " << GetLastError() << endl << endl;
@@ -293,7 +106,7 @@ void ProcessImage(const string& imagePath, ofstream& logFile) {
                 << "Found 'USBC' at offset: " << offset << " bytes" << endl;
 
             // Determine the length of the USBC block
-            unsigned int blockLength = findDiskSectorsAmount(buffer);
+            unsigned int blockLength = GetMovedBlockLength(buffer);
 
 
             cout << "USBC block length: " << blockLength << " sectors" << endl;
@@ -312,10 +125,10 @@ void ProcessImage(const string& imagePath, ofstream& logFile) {
 
             offsetLow32 = GetLower32Bits(offset);
             offsetHigh32 = GetUpper32Bits(offset);
-            SetFilePointer(hFile, offsetLow32, &offsetHigh32, FILE_BEGIN);
+            SetFilePointer(fileHandle, offsetLow32, &offsetHigh32, FILE_BEGIN);
 
             // In case of read error, skip this block and continue scanning
-            if (!ReadFile(hFile, blockBuffer, blockLength * sectorSize, &bytesRead, NULL) || bytesRead != blockLength * sectorSize) {
+            if (!ReadFile(fileHandle, blockBuffer, blockLength * sectorSize, &bytesRead, NULL) || bytesRead != blockLength * sectorSize) {
                 cerr << "Failed to read USBC block. Error: " << GetLastError() << endl;
                 logFile << "Failed to read USBC block at offset " << offset << ". Error: " << GetLastError() << endl;
                 delete[] blockBuffer;
@@ -341,15 +154,15 @@ void ProcessImage(const string& imagePath, ofstream& logFile) {
             // Write the rotated block back to the image
             offsetLow32 = GetLower32Bits(offset);
             offsetHigh32 = GetUpper32Bits(offset);
-            SetFilePointer(hFile, offsetLow32, &offsetHigh32, FILE_BEGIN);
+            SetFilePointer(fileHandle, offsetLow32, &offsetHigh32, FILE_BEGIN);
 
-            BOOL writeResult = WriteFile(hFile, rotatedBuffer, blockLength * sectorSize, &bytesWritten, NULL);
+            BOOL writeResult = WriteFile(fileHandle, rotatedBuffer, blockLength * sectorSize, &bytesWritten, NULL);
             if (!writeResult || bytesWritten != blockLength * sectorSize) {
                 cerr << "Failed to write rotated block at offset " << offset << ". Error: " << GetLastError() << endl;
                 logFile << "Failed to write rotated block at offset " << offset << ". Error: " << GetLastError() << endl;
             }
             else {
-                FlushFileBuffers(hFile); // Ensure data is flushed
+                FlushFileBuffers(fileHandle); // Ensure data is flushed
                 cout << "Successfully wrote rotated block to offset " << offset << " and marked it as 'DONE'" << endl << endl;
                 logFile << "Successfully wrote rotated block to offset " << offset << " and marked it as 'DONE'" << endl << endl;
             }
@@ -370,7 +183,7 @@ void ProcessImage(const string& imagePath, ofstream& logFile) {
         // Move the file pointer to the next offset explicitly
         offsetLow32 = GetLower32Bits(offset);
         offsetHigh32 = GetUpper32Bits(offset);
-        SetFilePointer(hFile, offsetLow32, &offsetHigh32, FILE_BEGIN);
+        SetFilePointer(fileHandle, offsetLow32, &offsetHigh32, FILE_BEGIN);
     }
 
     // Check for errors after the loop (e.g., if we exited due to an error rather than EOF)
@@ -380,7 +193,7 @@ void ProcessImage(const string& imagePath, ofstream& logFile) {
     }
 
     delete[] buffer;
-    CloseHandle(hFile);
+    CloseHandle(fileHandle);
 }
 
 
@@ -388,7 +201,7 @@ void ProcessImage(const string& imagePath, ofstream& logFile) {
 void ProcessDisk(const string& diskPath, ofstream& logFile) {
     wstring wideDiskPath = wstring(diskPath.begin(), diskPath.end());
 
-    HANDLE hDisk = CreateFile(
+    HANDLE diskHandle = CreateFile(
         wideDiskPath.c_str(),                   // Physical disk path (e.g., "\\\\.\\PhysicalDrive0")
         GENERIC_READ | GENERIC_WRITE,           // Access mode
         FILE_SHARE_READ | FILE_SHARE_WRITE,     // Share mode
@@ -398,7 +211,7 @@ void ProcessDisk(const string& diskPath, ofstream& logFile) {
         NULL                                    // Template file
     );
 
-    if (hDisk == INVALID_HANDLE_VALUE) {
+    if (diskHandle == INVALID_HANDLE_VALUE) {
         cerr << endl << "Failed to open disk. Error: " << GetLastError() << endl;
         logFile << endl << "Failed to open disk: " << diskPath << ". Error: " << GetLastError() << endl;
         return;
@@ -419,7 +232,7 @@ void ProcessDisk(const string& diskPath, ofstream& logFile) {
 
     // Get the total disk size to set a clear loop boundary
     LARGE_INTEGER diskSize;
-    GetFileSizeEx(hDisk, &diskSize);
+    GetFileSizeEx(diskHandle, &diskSize);
 
 
     while (offset < static_cast<unsigned long long>(diskSize.QuadPart)) {
@@ -427,10 +240,10 @@ void ProcessDisk(const string& diskPath, ofstream& logFile) {
         // Move the file pointer to the current offset
         offsetLow32 = GetLower32Bits(offset);
         offsetHigh32 = GetUpper32Bits(offset);
-        SetFilePointer(hDisk, offsetLow32, &offsetHigh32, FILE_BEGIN);
+        SetFilePointer(diskHandle, offsetLow32, &offsetHigh32, FILE_BEGIN);
 
         // Attempt to read the current sector
-        if (!ReadFile(hDisk, buffer, sectorSize, &bytesRead, NULL) || bytesRead != sectorSize) {
+        if (!ReadFile(diskHandle, buffer, sectorSize, &bytesRead, NULL) || bytesRead != sectorSize) {
             // Read error or EOF        
             cerr << endl << "Failed to read sector at offset " << offset << ". " << endl << endl;
             logFile << endl << "Failed to read sector at offset " << offset << ". " << endl << endl;
@@ -449,7 +262,7 @@ void ProcessDisk(const string& diskPath, ofstream& logFile) {
                 << "Found 'USBC' at offset: " << offset << " bytes" << endl;
 
             // Determine the length of the USBC block
-            unsigned int blockLength = findDiskSectorsAmount(buffer);
+            unsigned int blockLength = GetMovedBlockLength(buffer);
 
             cout << "USBC block length: " << blockLength << " sectors" << endl;
             logFile << "USBC block length: " << blockLength << " sectors" << endl;
@@ -469,10 +282,10 @@ void ProcessDisk(const string& diskPath, ofstream& logFile) {
 
             offsetLow32 = GetLower32Bits(offset);
             offsetHigh32 = GetUpper32Bits(offset);
-            SetFilePointer(hDisk, offsetLow32, &offsetHigh32, FILE_BEGIN);
+            SetFilePointer(diskHandle, offsetLow32, &offsetHigh32, FILE_BEGIN);
 
 
-            if (!ReadFile(hDisk, blockBuffer, blockLength * sectorSize, &bytesRead, NULL) || bytesRead != blockLength * sectorSize) {
+            if (!ReadFile(diskHandle, blockBuffer, blockLength * sectorSize, &bytesRead, NULL) || bytesRead != blockLength * sectorSize) {
                 cout << "Failed to read USBC block. Error: " << GetLastError() << endl;
                 cerr << "Failed to read USBC block. Error: " << GetLastError() << endl;
                 logFile << "Failed to read USBC block at offset " << offset << ". Error: " << GetLastError() << endl;
@@ -491,16 +304,16 @@ void ProcessDisk(const string& diskPath, ofstream& logFile) {
             // Write the rotated block back to the disk
             offsetLow32 = GetLower32Bits(offset);
             offsetHigh32 = GetUpper32Bits(offset);
-            SetFilePointer(hDisk, offsetLow32, &offsetHigh32, FILE_BEGIN);
+            SetFilePointer(diskHandle, offsetLow32, &offsetHigh32, FILE_BEGIN);
 
 
-            BOOL writeResult = WriteFile(hDisk, rotatedBuffer, blockLength * sectorSize, &bytesWritten, NULL);
+            BOOL writeResult = WriteFile(diskHandle, rotatedBuffer, blockLength * sectorSize, &bytesWritten, NULL);
             if (!writeResult || bytesWritten != blockLength * sectorSize) {
                 cerr << "Failed to write rotated block at offset " << offset << ". Error: " << GetLastError() << endl;
                 logFile << "Failed to write rotated block at offset " << offset << ". Error: " << GetLastError() << endl;
             }
             else {
-                FlushFileBuffers(hDisk); // Ensure data is written
+                FlushFileBuffers(diskHandle); // Ensure data is written
                 cout << "Successfully wrote rotated block to offset " << offset << " and marked it as 'DONE'" << endl << endl;
                 logFile << "Successfully wrote rotated block to offset " << offset << " and marked it as 'DONE'" << endl << endl;
             }
@@ -523,7 +336,7 @@ void ProcessDisk(const string& diskPath, ofstream& logFile) {
         // Move the file pointer to the next sector
         offsetLow32 = GetLower32Bits(offset);
         offsetHigh32 = GetUpper32Bits(offset);
-        SetFilePointer(hDisk, offsetLow32, &offsetHigh32, FILE_BEGIN);
+        SetFilePointer(diskHandle, offsetLow32, &offsetHigh32, FILE_BEGIN);
     }
 
     if (GetLastError() != ERROR_HANDLE_EOF && GetLastError() != 0) {
@@ -532,7 +345,7 @@ void ProcessDisk(const string& diskPath, ofstream& logFile) {
     }
 
     delete[] buffer;
-    CloseHandle(hDisk);
+    CloseHandle(diskHandle);
 }
 
 
@@ -600,7 +413,7 @@ int main() {
 
         ifstream pathFileInput, diskImageInput;
         ofstream diskImageOutput;
-        std::filesystem::path path; // IMPORTANT NOTE: "!" symbol is not available inside of path type variable 
+        filesystem::path path; // IMPORTANT NOTE: "!" symbol is not available inside of path type variable 
         string fileIsCorrect;
 
 
